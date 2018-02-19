@@ -12,6 +12,7 @@ module RackSessionAccess
     # * :key - rack session key
     def initialize(app, options = {})
       @app = app
+      @failsafe_env = {}
       @key = options[:key] || 'rack.session'
       @routing = [
         [ 'GET', RackSessionAccess.path,      :show   ],
@@ -26,6 +27,7 @@ module RackSessionAccess
       end unless env[@key]
 
       request = ::Rack::Request.new(env)
+      request.env[@key] = @failsafe_env if request.env[@key].length.zero?
 
       if action = dispatch_action(request)
         send(action, request)
@@ -38,6 +40,7 @@ module RackSessionAccess
 
     # List session data
     def show(request)
+      request.env[@key] = @failsafe_env if request.env[@key].length.zero?
       # force load session because it can be lazy loaded
       request.env[@key].delete(:rack_session_access_force_load_session)
 
@@ -90,6 +93,7 @@ module RackSessionAccess
         data = request.params['data']
         hash = RackSessionAccess.decode(data)
         hash.each { |k, v| request.env[@key][k] = v }
+        @failsafe_env = request.env[@key]
       rescue => e
         return render(400) do |xml|
           xml.h2("Bad data #{data.inspect}: #{e.message} ")
